@@ -2,7 +2,7 @@
 const DB_KEY = 'mySmartLocalSiteData';
 
 // **!! تم تحديث هذا الرابط ليطابق رابط موقعك على GitHub Pages !!**
-const DUMMY_BASE_URL = 'https://pavzwe.github.io/mustafahas2/index.html'; 
+const DUMMY_BASE_URL = 'https://github.com/PAVZWE/mustafahas2/blob/main/index.html'; 
 
 // **بيانات أولية (تظهر فقط عند تشغيل التطبيق لأول مرة)**
 const initialPosts = [
