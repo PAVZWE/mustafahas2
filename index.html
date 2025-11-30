@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق التواصل المحلي الذكي</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>💎 موقع تفاعلاتك الذكي المحلي 💎</h1>
+        <p>لايكات وتعليقات محفوظة على جهازك، ويمكن مشاركتها يدوياً.</p>
+    </header>
+
+    <div class="controls">
+        <button id="share-button" onclick="createShareableLink()">🔗 شارك تفاعلاتي مع الأصدقاء</button>
+        <button id="add-new-post-button" onclick="showAddPostForm()">➕ أضف منشور جديد</button>
+        <button id="clear-data-button" onclick="clearLocalData()">🗑️ مسح كل البيانات المحلية</button>
+    </div>
+
+    <div id="share-output" style="margin-top: 15px; display: none;">
+        <div id="status-light"></div>
+        
+        <p>انسخ الرابط أدناه وشاركه مع صديقك:</p>
+        <textarea id="share-link-area" readonly rows="3" style="width: 100%;"></textarea>
+    </div>
+
+    <div id="add-post-form" class="hidden-form">
+        <h3>أضف صورة ومنشور جديد</h3>
+        <label for="new-image-path">مسار الصورة (مثال: images/new_photo.jpg):</label>
+        <input type="text" id="new-image-path" placeholder="اكتب مسار الصورة هنا" required>
+        <label for="new-caption">وصف المنشور:</label>
+        <textarea id="new-caption" placeholder="اكتب وصفاً لصورتك هنا..." required></textarea>
+        <button onclick="addNewPost()">إضافة المنشور</button>
+        <button onclick="hideAddPostForm()">إلغاء</button>
+    </div>
+
+    <div id="posts-container">
+        </div>
+
+    <footer>
+        <p>&copy; 2023 تصميم ذكي بدون سيرفرات</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
