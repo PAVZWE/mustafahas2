@@ -1,774 +1,266 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>غرفة التفاعل الموحدة</title>
-    
-    <!-- Firebase SDK v10+ -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js"></script>
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+
+<script>
+    // 🔑 1. تهيئة Firebase ومفاتيحك
+    const firebaseConfig = {
+        apiKey: "AIzaSyDSCsM19ILK-5nVapzgTNEjW3_l1smrpJY",
+        authDomain: "pavzwe6.firebaseapp.com",
+        databaseURL: "https://pavzwe6-default-rtdb.firebaseio.com",
+        projectId: "pavzwe6",
+        storageBucket: "pavzwe6.firebasestorage.app",
+        messagingSenderId: "510449150820",
+        appId: "1:510449150820:web:e05d51f2645e00cfeb6871"
+    };
+
+    let db;
+    let isAdmin = false;
+    let userId = localStorage.getItem('userId') || `user-${Date.now()}`;
+
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // إذا كان المستخدم جديداً، نحفظ له معرّفاً فريداً
+        if (!localStorage.getItem('userId')) {
+            localStorage.setItem('userId', userId);
+        }
+        loadGallery();
+        checkAdminStatus();
+        setupKeyboard();
+    });
+
+    function checkAdminStatus() {
+        if (localStorage.getItem('isAdmin') === 'true') {
+            isAdmin = true;
+            document.getElementById('adminPanel').classList.add('show');
+            document.getElementById('logoutBtn').classList.remove('hidden');
+        }
+    }
+
+    function openLoginModal() {
+        document.getElementById('loginModal').classList.add('show');
+        document.getElementById('adminPassword').focus();
+    }
+
+    function closeLoginModal() {
+        document.getElementById('loginModal').classList.remove('show');
+        document.getElementById('adminPassword').value = '';
+    }
+
+    function adminLogin() {
+        const password = document.getElementById('adminPassword').value;
+        const ADMIN_PASSWORD = 'admin123'; // كلمة المرور الافتراضية
+
+        if (password === ADMIN_PASSWORD) {
+            isAdmin = true;
+            localStorage.setItem('isAdmin', 'true');
+            document.getElementById('adminPanel').classList.add('show');
+            document.getElementById('logoutBtn').classList.remove('hidden');
+            closeLoginModal();
+            showAlert('✓ تم تسجيل الدخول بنجاح', 'success');
+        } else {
+            showAlert('✗ كلمة المرور غير صحيحة', 'error');
+        }
+    }
+
+    function logout() {
+        isAdmin = false;
+        localStorage.removeItem('isAdmin');
+        document.getElementById('adminPanel').classList.remove('show');
+        document.getElementById('logoutBtn').classList.add('hidden');
+        showAlert('تم تسجيل الخروج', 'success');
+    }
+
+    // ----------------------------------------------------
+    // 🔑 2. منطق رفع المحتوى (Upload)
+    // ----------------------------------------------------
+
+    async function uploadMedia() {
+        if (!isAdmin) {
+            alert('يجب تسجيل الدخول أولاً');
+            return;
         }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-            color: #333;
+        const title = document.getElementById('title').value.trim();
+        const description = document.getElementById('description').value.trim();
+        const type = document.getElementById('type').value;
+        const url = document.getElementById('url').value.trim();
+
+        if (!title || !url) {
+            showAlert('الرجاء ملء جميع الحقول المطلوبة', 'error');
+            return;
         }
 
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        #login-screen {
-            background: white;
-            border-radius: 12px;
-            padding: 40px;
-            text-align: center;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-            margin-top: 100px;
-        }
-
-        #login-screen h1 {
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 2.5em;
-        }
-
-        #login-screen p {
-            color: #999;
-            margin-bottom: 30px;
-            font-size: 1.1em;
-        }
-
-        .login-form {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .login-form input {
-            flex: 1;
-            min-width: 200px;
-            padding: 14px;
-            border: 2px solid #eee;
-            border-radius: 8px;
-            font-size: 1em;
-            text-align: center;
-        }
-
-        .login-form input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .login-form button {
-            padding: 14px 40px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            font-size: 1em;
-        }
-
-        .login-form button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        #app-screen {
-            display: none;
-        }
-
-        .sync-indicator {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: white;
-            padding: 15px 20px;
-            border-radius: 50px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 100;
-        }
-
-        .sync-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-        }
-
-        .sync-dot.synced {
-            background: #27ae60;
-            box-shadow: 0 0 10px rgba(39, 174, 96, 0.7);
-        }
-
-        .sync-dot.syncing {
-            background: #f39c12;
-            box-shadow: 0 0 10px rgba(243, 156, 18, 0.7);
-            animation: pulse 1s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        .sync-text {
-            font-size: 0.85em;
-            font-weight: 600;
-        }
-
-        .sync-text.synced {
-            color: #27ae60;
-        }
-
-        .sync-text.syncing {
-            color: #f39c12;
-        }
-
-        header {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            text-align: center;
-            margin-bottom: 30px;
-            margin-top: 70px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        }
-
-        header h1 {
-            color: #667eea;
-            margin-bottom: 5px;
-            font-size: 2.2em;
-        }
-
-        header p {
-            color: #999;
-            margin-bottom: 10px;
-        }
-
-        .room-info {
-            background: #f0f8ff;
-            padding: 10px 20px;
-            border-radius: 8px;
-            display: inline-block;
-            color: #667eea;
-            font-weight: 600;
-        }
-
-        .controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 30px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .controls button {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 1em;
-            transition: all 0.3s;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        }
-
-        .controls button:hover {
-            transform: translateY(-2px);
-        }
-
-        .controls button.logout {
-            background: linear-gradient(135deg, #dc3545 0%, #ff6b6b 100%);
-        }
-
-        .add-post-form {
-            background: white;
-            padding: 25px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            display: none;
-        }
-
-        .add-post-form.active {
-            display: block;
-        }
-
-        .add-post-form h3 {
-            color: #667eea;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #667eea;
-            padding-bottom: 10px;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            color: #333;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #eee;
-            border-radius: 8px;
-            font-family: inherit;
-            font-size: 1em;
-        }
-
-        .form-group textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-
-        .form-group input:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .form-buttons {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        .form-buttons button {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .form-buttons .btn-submit {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .form-buttons .btn-cancel {
-            background: #eee;
-            color: #333;
-        }
-
-        .posts-container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        .post {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        }
-
-        .post-image {
-            width: 100%;
-            height: 300px;
-            object-fit: cover;
-            display: block;
-        }
-
-        .post-content {
-            padding: 20px;
-        }
-
-        .post-caption {
-            color: #333;
-            line-height: 1.6;
-            margin-bottom: 15px;
-        }
-
-        .post-stats {
-            display: flex;
-            gap: 20px;
-            padding: 15px;
-            background: #f9f9f9;
-            border-radius: 8px;
-            margin-bottom: 15px;
-        }
-
-        .stat {
-            font-weight: 600;
-            color: #667eea;
-        }
-
-        .post-actions {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .action-btn {
-            flex: 1;
-            padding: 10px;
-            background: #f5f5f5;
-            border: 2px solid #eee;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            color: #667eea;
-            transition: all 0.3s;
-        }
-
-        .action-btn:hover {
-            background: #667eea;
-            color: white;
-        }
-
-        .action-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .comments-section {
-            background: #f9f9f9;
-            padding: 15px;
-            border-radius: 8px;
-        }
-
-        .comment {
-            background: white;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-            border-right: 3px solid #667eea;
-        }
-
-        .comment-author {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 5px;
-        }
-
-        .comment-text {
-            color: #555;
-        }
-
-        .add-comment {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .add-comment input {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-        }
-
-        .add-comment button {
-            padding: 10px 20px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        .add-comment button:hover {
-            background: #764ba2;
-        }
-
-        .no-comments {
-            color: #999;
-            font-style: italic;
-        }
-
-        footer {
-            text-align: center;
-            color: white;
-            padding: 20px;
-            margin-top: 40px;
-        }
-
-        .setup-notice {
-            background: #fff3cd;
-            color: #856404;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-    </style>
-</head>
-<body>
-    <div class="sync-indicator">
-        <div class="sync-dot syncing" id="sync-dot"></div>
-        <span class="sync-text syncing" id="sync-text">⟳ جاري التحميل...</span>
-    </div>
-
-    <div class="container">
-        <div id="login-screen">
-            <h1>🔐 غرفة التفاعل الموحدة</h1>
-            <p>أدخل كلمة المرور للدخول للغرفة</p>
-            
-            <div class="setup-notice" id="setup-notice" style="display: none;">
-                ⚠️ التطبيق يحتاج تكوين Firebase. اتصل بالمطور!
-            </div>
-
-            <div class="login-form">
-                <input type="password" id="password-input" placeholder="أدخل كلمة المرور" autofocus>
-                <button onclick="handleLogin()">دخول</button>
-            </div>
-            <p style="color: #999; font-size: 0.9em;">البيانات موحدة مع الكل
-            <br>كل من يدخل نفس الكلمة يشوف نفس المنشورات واللايكات والتعليقات! 💚✨</p>
-        </div>
-
-        <div id="app-screen">
-            <header>
-                <h1>💎 غرفة التفاعل</h1>
-                <p>شارك وتفاعل بسهولة</p>
-                <div class="room-info">
-                    🔑 الغرفة: <span id="room-name"></span>
-                </div>
-            </header>
-
-            <div class="controls">
-                <button onclick="showAddPostForm()">➕ أضف منشور جديد</button>
-                <button class="logout" onclick="handleLogout()">🚪 خروج</button>
-            </div>
-
-            <div id="add-post-form" class="add-post-form">
-                <h3>📝 أضف منشور جديد</h3>
-                <div class="form-group">
-                    <label>رابط الصورة</label>
-                    <input type="url" id="new-image-path" placeholder="https://example.com/image.jpg">
-                </div>
-                <div class="form-group">
-                    <label>وصف المنشور</label>
-                    <textarea id="new-caption" placeholder="اكتب وصفاً لصورتك..." required></textarea>
-                </div>
-                <div class="form-buttons">
-                    <button class="btn-submit" onclick="addNewPost()">✨ نشر</button>
-                    <button class="btn-cancel" onclick="hideAddPostForm()">إلغاء</button>
-                </div>
-            </div>
-
-            <div id="posts-container" class="posts-container"></div>
-
-            <footer>
-                <p>&copy; 2025 - غرفة موحدة متزامنة 💚</p>
-            </footer>
-        </div>
-    </div>
-
-    <script>
-        // Firebase Configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyDSCsM19ILK-5nVapzgTNEjW3_l1smrpJY",
-            authDomain: "pavzwe6.firebaseapp.com",
-            databaseURL: "https://pavzwe6-default-rtdb.firebaseio.com",
-            projectId: "pavzwe6",
-            storageBucket: "pavzwe6.firebasestorage.app",
-            messagingSenderId: "510449150820",
-            appId: "1:510449150820:web:e05d51f2645e00cfeb6871",
-            measurementId: "G-TTJHT37W4P"
-        };
-
-        let db;
-        let currentRoom = null;
-        let firebaseInitialized = false;
-
-        // Initialize Firebase with better error handling
         try {
-            if (!firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-            }
-            db = firebase.database();
+            const newMediaRef = db.ref('gallery').push(); // استخدام push() للحصول على ID فريد تلقائياً
+            const itemId = newMediaRef.key;
             
-            // Test connection
-            db.ref('.info/connected').on('value', function(connectedSnap) {
-                if (connectedSnap.val() === true) {
-                    firebaseInitialized = true;
-                    setSyncStatus(true, '✓ متصل');
-                    console.log('✓ Firebase متصل');
-                } else {
-                    firebaseInitialized = false;
-                    setSyncStatus(false, 'بدون اتصال', true);
-                    console.log('✗ Firebase بدون اتصال');
-                }
+            await newMediaRef.set({
+                id: itemId,
+                title,
+                description,
+                type,
+                url,
+                likes: 0,
+                likedBy: {}, // مصفوفة لتخزين معرفات المستخدمين الذين أعجبوا بالمنشور
+                createdAt: Date.now()
             });
+
+            showAlert('✓ تم رفع المحتوى بنجاح', 'success');
+            document.getElementById('title').value = '';
+            document.getElementById('description').value = '';
+            document.getElementById('url').value = '';
+            // لا نحتاج لـ loadGallery، لأن الاستماع الآني سيتكفل بالتحديث
         } catch (error) {
-            console.error('خطأ في Firebase:', error);
-            firebaseInitialized = false;
-            document.getElementById('setup-notice').style.display = 'block';
-            setSyncStatus(false, '❌ Firebase غير مهيأ', true);
+            console.error('Upload error:', error);
+            showAlert('✗ حدث خطأ في الرفع', 'error');
         }
+    }
 
-        function handleLogin() {
-            if (!firebaseInitialized) {
-                alert('التطبيق غير جاهز. اتصل بالمطور!');
-                return;
-            }
+    // ----------------------------------------------------
+    // 🔑 3. منطق عرض المحتوى والتحميل الآني (Realtime Listener)
+    // ----------------------------------------------------
 
-            const passwordInput = document.getElementById('password-input');
-            const password = passwordInput.value.trim();
-
-            if (!password) {
-                alert('الرجاء إدخال كلمة المرور');
-                return;
-            }
-
-            currentRoom = password.replace(/[^a-zA-Z0-9]/g, '_');
-            setSyncStatus(false, 'جاري الاتصال...');
-
-            // Show app
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('app-screen').style.display = 'block';
-            document.getElementById('room-name').textContent = password.substring(0, 10) + (password.length > 10 ? '...' : '');
-
-            loadPosts();
-
-            // Real-time listener
-            db.ref(`rooms/${currentRoom}/posts`).on('value', () => {
-                loadPosts();
-            });
-        }
-
-        function handleLogout() {
-            if (confirm('هل تريد تسجيل الخروج؟')) {
-                if (currentRoom) {
-                    db.ref(`rooms/${currentRoom}/posts`).off('value');
-                }
-                currentRoom = null;
-                document.getElementById('password-input').value = '';
-                document.getElementById('login-screen').style.display = 'block';
-                document.getElementById('app-screen').style.display = 'none';
-                document.getElementById('password-input').focus();
-            }
-        }
-
-        function setSyncStatus(isSynced, message = '', isError = false) {
-            const dot = document.getElementById('sync-dot');
-            const text = document.getElementById('sync-text');
+    function loadGallery() {
+        const container = document.getElementById('galleryContainer');
+        const emptyState = document.getElementById('emptyState');
+        
+        // استخدام on() للاستماع للتغييرات الآنية (Realtime)
+        db.ref('gallery').on('value', (snapshot) => {
+            const items = [];
             
-            if (isError) {
-                dot.className = 'sync-dot syncing';
-                text.className = 'sync-text syncing';
-                text.textContent = message || '⚠️ خطأ';
-            } else if (isSynced) {
-                dot.className = 'sync-dot synced';
-                text.className = 'sync-text synced';
-                text.textContent = message || '✓ متصل';
-            } else {
-                dot.className = 'sync-dot syncing';
-                text.className = 'sync-text syncing';
-                text.textContent = message || '⟳ جاري التزامن...';
-            }
-        }
-
-        async function loadPosts() {
-            if (!currentRoom || !firebaseInitialized) return;
-
-            try {
-                const snapshot = await db.ref(`rooms/${currentRoom}/posts`).get();
-                let posts = [];
-                
-                if (snapshot.exists()) {
-                    const postsObj = snapshot.val();
-                    posts = Object.entries(postsObj).map(([id, post]) => ({
-                        id,
-                        ...post
-                    })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-                }
-                
-                renderPosts(posts);
-                setSyncStatus(true);
-            } catch (error) {
-                console.error('خطأ في تحميل البيانات:', error);
-                setSyncStatus(false, 'خطأ في الاتصال', true);
-            }
-        }
-
-        async function addNewPost() {
-            const imagePath = document.getElementById('new-image-path').value.trim();
-            const caption = document.getElementById('new-caption').value.trim();
-
-            if (!caption) {
-                alert("الرجاء إدخال الوصف");
-                return;
-            }
-
-            setSyncStatus(false, 'جاري النشر...');
-
-            try {
-                const postId = Date.now().toString();
-                const newPost = {
-                    caption: caption,
-                    imagePath: imagePath || 'https://via.placeholder.com/500x300?text=صورة',
-                    likeCount: 0,
-                    likes: {},
-                    comments: [],
-                    createdAt: Date.now()
-                };
-
-                await db.ref(`rooms/${currentRoom}/posts/${postId}`).set(newPost);
-
-                hideAddPostForm();
-                document.getElementById('new-image-path').value = '';
-                document.getElementById('new-caption').value = '';
-                loadPosts();
-            } catch (error) {
-                console.error('خطأ:', error);
-                setSyncStatus(false, 'خطأ في النشر', true);
-                alert('خطأ في نشر المنشور');
-            }
-        }
-
-        async function toggleLike(postId) {
-            setSyncStatus(false, 'جاري التحديث...');
-
-            try {
-                const userId = 'user-' + Date.now();
-                const likeRef = db.ref(`rooms/${currentRoom}/posts/${postId}/likes/${userId}`);
-                const snapshot = await likeRef.get();
-
-                if (snapshot.exists()) {
-                    await likeRef.remove();
-                } else {
-                    await likeRef.set(true);
-                }
-
-                loadPosts();
-            } catch (error) {
-                console.error('خطأ:', error);
-                setSyncStatus(false, 'خطأ في الإعجاب', true);
-            }
-        }
-
-        async function addComment(postId) {
-            const input = document.getElementById(`comment-input-${postId}`);
-            const text = input.value.trim();
-
-            if (!text) return;
-
-            setSyncStatus(false, 'جاري إرسال التعليق...');
-
-            try {
-                const commentsRef = db.ref(`rooms/${currentRoom}/posts/${postId}/comments`);
-                const snapshot = await commentsRef.get();
-                const comments = snapshot.val() || [];
-
-                comments.push({
-                    text: text,
-                    author: 'زائر',
-                    timestamp: Date.now()
+            if (snapshot.exists()) {
+                // استخدام forEach لجلب العناصر بالترتيب
+                snapshot.forEach(childSnapshot => {
+                    const item = childSnapshot.val();
+                    items.push(item);
                 });
-
-                await commentsRef.set(comments);
-
-                input.value = '';
-                loadPosts();
-            } catch (error) {
-                console.error('خطأ:', error);
-                setSyncStatus(false, 'خطأ في التعليق', true);
             }
-        }
 
-        function renderPosts(posts) {
-            const container = document.getElementById('posts-container');
-
-            if (!posts || posts.length === 0) {
-                container.innerHTML = '<div style="color: white; text-align: center; padding: 40px; font-size: 1.2em;">لا توجد منشورات بعد</div>';
+            if (items.length === 0) {
+                container.innerHTML = '';
+                emptyState.style.display = 'block';
                 return;
             }
 
-            container.innerHTML = posts.map(post => {
-                const likeCount = post.likes ? Object.keys(post.likes).length : 0;
-                const commentCount = post.comments ? post.comments.length : 0;
+            // عرض العناصر بترتيب عكسي (الأحدث أولاً)
+            items.reverse(); 
 
-                return `
-                    <div class="post">
-                        <img src="${post.imagePath || 'https://via.placeholder.com/500x300?text=صورة'}" alt="صورة" class="post-image" onerror="this.src='https://via.placeholder.com/500x300?text=صورة'">
-                        
-                        <div class="post-content">
-                            <p class="post-caption">${post.caption}</p>
-                            
-                            <div class="post-stats">
-                                <span class="stat">❤️ ${likeCount} إعجاب</span>
-                                <span class="stat">💬 ${commentCount} تعليق</span>
-                            </div>
-
-                            <div class="post-actions">
-                                <button class="action-btn" onclick="toggleLike('${post.id}')">❤️ إعجاب</button>
-                                <button class="action-btn" onclick="toggleComments('${post.id}')">💬 تعليقات</button>
-                            </div>
-
-                            <div class="comments-section" id="comments-${post.id}" style="display: none;">
-                                <div id="comments-list-${post.id}">
-                                    ${(!post.comments || post.comments.length === 0)
-                                        ? '<p class="no-comments">لا توجد تعليقات بعد</p>' 
-                                        : post.comments.map(comment => `
-                                            <div class="comment">
-                                                <div class="comment-author">${comment.author || 'زائر'}</div>
-                                                <div class="comment-text">${comment.text}</div>
-                                            </div>
-                                        `).join('')
-                                    }
-                                </div>
-                                <div class="add-comment">
-                                    <input type="text" id="comment-input-${post.id}" placeholder="اكتب تعليقاً...">
-                                    <button onclick="addComment('${post.id}')">إرسال</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function toggleComments(postId) {
-            const section = document.getElementById(`comments-${postId}`);
-            section.style.display = section.style.display === 'none' ? 'block' : 'none';
-        }
-
-        function showAddPostForm() {
-            document.getElementById('add-post-form').classList.add('active');
-        }
-
-        function hideAddPostForm() {
-            document.getElementById('add-post-form').classList.remove('active');
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('password-input').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') handleLogin();
-            });
+            emptyState.style.display = 'none';
+            container.innerHTML = items.map(item => createMediaCard(item)).join('');
+        }, (error) => {
+            console.error('Load error:', error);
+            showAlert('✗ خطأ في تحميل المحتوى', 'error');
         });
-    </script>
-</body>
-</html>
+    }
+
+    function createMediaCard(item) {
+        const isVideo = item.type === 'video';
+        // فحص ما إذا كان المستخدم الحالي قد أعجب بالمنشور
+        const userHasLiked = item.likedBy && item.likedBy[userId] === true;
+        
+        const mediaHTML = isVideo
+            ? `<video><source src="${item.url}"></video><div class="play-button">▶</div>`
+            : `<img src="${item.url}" alt="${item.title}">`;
+
+        // تعديل لون الزر بناءً على حالة الإعجاب
+        const likeButtonClass = userHasLiked ? 'btn-like liked' : 'btn-like';
+        
+        return `
+            <div class="media-card" onclick="openGalleryModal('${item.type}', '${item.url}')">
+                <div class="media-container">${mediaHTML}</div>
+                <div class="media-info">
+                    <div class="media-title">${item.title}</div>
+                    <div class="media-description">${item.description || ''}</div>
+                    <div class="media-actions">
+                        <button class="${likeButtonClass}" onclick="toggleLike(event, '${item.id}', ${userHasLiked})">
+                            ${userHasLiked ? '❤️ تم الإعجاب' : '🤍 إعجاب'} (${item.likes || 0})
+                        </button>
+                        ${isAdmin ? `<button class="btn-delete" onclick="deleteMedia(event, '${item.id}')">حذف</button>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // ----------------------------------------------------
+    // 🔑 4. منطق الإعجاب/إلغاء الإعجاب (Transaction)
+    // ----------------------------------------------------
+    
+    async function toggleLike(event, mediaId, userHasLiked) {
+        event.stopPropagation();
+        
+        const mediaRef = db.ref(`gallery/${mediaId}`);
+        
+        try {
+            // استخدام transaction لضمان تحديث عدد الإعجابات بشكل آمن ودقيق
+            await mediaRef.transaction((currentMedia) => {
+                if (currentMedia) {
+                    currentMedia.likes = currentMedia.likes || 0;
+                    currentMedia.likedBy = currentMedia.likedBy || {};
+
+                    if (userHasLiked) {
+                        // إلغاء الإعجاب
+                        currentMedia.likes--;
+                        delete currentMedia.likedBy[userId];
+                    } else {
+                        // إضافة الإعجاب
+                        currentMedia.likes++;
+                        currentMedia.likedBy[userId] = true;
+                    }
+                }
+                return currentMedia;
+            });
+
+            // لا نحتاج لـ loadGallery، لأن الـ on('value') ستقوم بالتحديث تلقائياً
+        } catch (error) {
+            console.error('Like transaction failed:', error);
+            showAlert('✗ فشل الإعجاب', 'error');
+        }
+    }
+
+
+    async function deleteMedia(event, mediaId) {
+        event.stopPropagation();
+        if (!confirm('هل تريد حذف هذا المحتوى؟')) return;
+
+        try {
+            await db.ref(`gallery/${mediaId}`).remove();
+            showAlert('✓ تم الحذف بنجاح', 'success');
+            // التحديث يتم تلقائياً عبر on('value')
+        } catch (error) {
+            console.error('Delete error:', error);
+            showAlert('✗ خطأ في الحذف', 'error');
+        }
+    }
+
+    function openGalleryModal(type, url) {
+        const modalContent = document.getElementById('modalContent');
+        if (type === 'video') {
+            modalContent.innerHTML = `<video controls autoplay><source src="${url}"></video>`;
+        } else {
+            modalContent.innerHTML = `<img src="${url}" alt="Image">`;
+        }
+        document.getElementById('galleryModal').classList.add('show');
+    }
+
+    function closeGalleryModal() {
+        document.getElementById('galleryModal').classList.remove('show');
+    }
+
+    function showAlert(message, type) {
+        const alertBox = document.getElementById('alertBox');
+        alertBox.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+        setTimeout(() => {
+            alertBox.innerHTML = '';
+        }, 4000);
+    }
+
+    function setupKeyboard() {
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeGalleryModal();
+            if (e.key === 'Enter' && document.getElementById('loginModal').classList.contains('show')) {
+                adminLogin();
+            }
+        });
+    }
+</script>
